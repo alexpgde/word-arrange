@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentence Scramble: Educator Edition</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff; --text-color: #2c3e50;
+            --primary-color: #27ae60; --secondary-color: #d1e7dd;
+            --accent-color: #f8f9fa; --hover-bg: #e8f5e9;
+            --box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            --font-family: "Times New Roman", "PMingLiu", "新細明體", serif;
+            --card-border: 1px solid #dee2e6;
+        }
+        body.dark-mode {
+            --bg-color: #121212; --text-color: #e0e0e0;
+            --primary-color: #b0bec5; --secondary-color: #37474f;
+            --accent-color: #1a2a3a; --hover-bg: #1e1e1e;
+            --box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+            --card-border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body {
+            font-family: var(--font-family); background-color: var(--bg-color);
+            color: var(--text-color); transition: all 0.5s ease;
+            display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; min-height: 100vh;
+        }
+        #game-container {
+            background-color: var(--bg-color); padding: 30px; border-radius: 20px;
+            box-shadow: var(--box-shadow); border: var(--card-border);
+            width: 95%; max-width: 800px; text-align: center; position: relative;
+        }
+        /* UI 元件 */
+        #theme-toggle { position: fixed; top: 20px; right: 20px; background: none; border: none; cursor: pointer; z-index: 1000; }
+        #theme-toggle svg { fill: var(--text-color); }
+        .sun-icon, body.dark-mode .moon-icon { display: none; }
+        body.dark-mode .sun-icon { display: block; }
+
+        .mode-card {
+            padding: 20px; border: var(--card-border); border-radius: 12px;
+            cursor: pointer; transition: 0.2s; background-color: var(--bg-color); margin-bottom: 15px;
+        }
+        .mode-card:hover { border-color: var(--primary-color); background-color: var(--hover-bg); }
+
+        .main-btn {
+            width: 100%; padding: 18px; background-color: var(--primary-color);
+            color: #fff; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1.1rem;
+        }
+        body.dark-mode .main-btn { background-color: #37474f; color: #cfd8dc; }
+
+        /* 核心教學設計：方塊與提示 */
+        .word-pool { 
+            display: flex; flex-wrap: wrap; gap: 15px; min-height: 100px; 
+            margin: 20px 0; padding: 20px; border: 2px dashed var(--primary-color); 
+            border-radius: 12px; align-items: center; justify-content: center;
+        }
+        
+        .word-card { 
+            background-color: var(--accent-color); color: var(--text-color);
+            padding: 15px 25px; border-radius: 10px; cursor: grab; font-size: 1.3rem;
+            user-select: none; transition: 0.2s; border: 2px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        
+        /* SEN 支架：強化句首與句尾視覺暗示 */
+        .word-card.is-start { border: 3px solid #3498db; background-color: #ebf5fb; }
+        .word-card.is-end { border: 3px solid #e67e22; background-color: #fef5e7; }
+        body.dark-mode .word-card.is-start { border-color: #2980b9; background-color: #1a2a3a; }
+        body.dark-mode .word-card.is-end { border-color: #d35400; background-color: #2c1e1e; }
+
+        .word-card:hover { transform: translateY(-3px); border-color: var(--primary-color); }
+        .word-card.dragging { opacity: 0.3; transform: scale(0.9); }
+        .drag-placeholder { border: 2px dashed var(--primary-color); background: var(--secondary-color); border-radius: 10px; }
+
+        /* 答對時的視覺正向回饋 */
+        .flash-success { animation: flashGreen 0.5s; }
+        @keyframes flashGreen { 
+            0% { background-color: var(--bg-color); }
+            50% { background-color: #d4edda; }
+            100% { background-color: var(--bg-color); }
+        }
+
+        .report-box { text-align: left; background: #fff; padding: 25px; border-radius: 15px; border: 2px solid var(--primary-color); color: #333; }
+        body.dark-mode .report-box { background: #1a1a1a; color: #ddd; }
+        .error-tag { color: #e74c3c; font-weight: bold; margin-left: 10px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<button id="theme-toggle" onclick="toggleTheme()">
+    <svg class="moon-icon" width="24" height="24" viewBox="0 0 24 24"><path d="M12.1 22c-5.5 0-10-4.5-10-10 0-3.3 1.6-6.2 4.2-7.9.5-.3 1.1-.1 1.4.4.2.4.2.9-.1 1.3C6.7 7.1 6 8.5 6 10c0 3.3 2.7 6 6 6 1.5 0 2.9-.6 3.9-1.6.3-.3.8-.4 1.3-.1.5.2.7.8.4 1.3-1.7 2.6-4.6 4.2-7.9 4.2zm1-2c2.1 0 4.1-1.1 5.3-2.9C15.8 19.3 13.9 20 12 20c-4.4 0-8-3.6-8-8 0-1.9.7-3.8 1.9-5.3C4.1 7.9 3 9.9 3 12c0 4.9 4.1 9 9 9z"/></svg>
+    <svg class="sun-icon" width="24" height="24" viewBox="0 0 24 24"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6zm0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4z"/></svg>
+</button>
+
+<div id="game-container">
+    <div id="lang-screen">
+        <h1 style="color: var(--primary-color);">Learning Center / 教學中心</h1>
+        <div class="mode-card" onclick="setLanguage('en')"><h2>English</h2></div>
+        <div class="mode-card" onclick="setLanguage('zh')"><h2>中文</h2></div>
+    </div>
+
+    <div id="start-screen" class="hidden">
+        <h1 id="ui-main-title">🚀 英語重組大挑戰</h1>
+        <div class="mode-card" onclick="selectSystemMode('multi')">
+            <h2 id="ui-mode-multi-title">🌌 星際挑戰賽</h2>
+            <p id="ui-mode-multi-desc">同步老師的官方題庫</p>
+        </div>
+        <div class="mode-card" onclick="selectSystemMode('single')">
+            <h2 id="ui-mode-single-title">🛡️ 自主訓練營</h2>
+            <p id="ui-mode-single-desc">上傳 Excel 或 CSV 練習</p>
+        </div>
+        <button class="main-btn" style="background-color: #673ab7;" onclick="showHistoryList()" id="ui-btn-history">📜 查看歷史戰報</button>
+    </div>
+
+    <div id="upload-screen" class="hidden">
+        <h2 id="ui-upload-title">📂 上傳題庫</h2>
+        <input type="file" id="excel-file" accept=".xlsx, .xls, .csv">
+        <br><br><button class="main-btn" onclick="location.reload()" id="ui-btn-back">返回</button>
+    </div>
+
+    <div id="mode-screen" class="hidden">
+        <h2 id="ver-display">...</h2>
+        <div class="mode-card" onclick="initGame('Practice Mode')"><h3 id="ui-opt-practice">📖 完整練習</h3></div>
+        <div class="mode-card" onclick="initGame('Delta Challenge')"><h3 id="ui-opt-delta">🎲 Delta 的挑戰 (隨機 10 題)</h3></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        <div style="display:flex; justify-content: space-between;"><span id="q-info"></span><span>⏱️ <b id="timer">0.0</b>s</span></div>
+        <div id="main-dialogue" class="dialogue-box">
+            <b>Person A:</b> <div id="word-pool" class="word-pool"></div>
+            <b>Person B:</b> <span id="hint-text"></span>
+        </div>
+        <button class="main-btn" onclick="checkAnswer()" id="ui-btn-submit">確認提交</button>
+    </div>
+
+    <div id="report-screen" class="hidden">
+        <h1 id="ui-report-title">🏆 挑戰完成！</h1>
+        <div class="report-box" id="report-content"></div>
+        <button class="main-btn" onclick="location.reload()" id="ui-btn-home">回到主頁</button>
+    </div>
+
+    <div id="history-screen" class="hidden">
+        <h1 id="ui-history-title">📜 歷史紀錄</h1>
+        <div id="history-list"></div>
+        <button class="main-btn" onclick="location.reload()" id="ui-btn-back2" style="background:#95a5a6">返回</button>
+    </div>
+</div>
+
+<script>
+    const GITHUB_USERNAME = "alexpgde"; 
+    const REPO_NAME = "word-arrange";       
+
+    const i18n = {
+        zh: {
+            mainTitle: "🚀 英語重組大挑戰", modeMulti: "🌌 星際挑戰賽", modeMultiDesc: "同步老師的官方題庫",
+            modeSingle: "🛡️ 自主訓練營", modeSingleDesc: "上傳題庫進行練習", btnHistory: "📜 查看歷史戰報",
+            btnBack: "返回", btnSubmit: "確認提交", uploadTitle: "📂 上傳自定義題庫", optPractice: "📖 完整練習",
+            optDelta: "🎲 Delta 的挑戰 (隨機 10 題)", reportTitle: "🏆 挑戰完成！", btnHome: "回到主頁",
+            historyTitle: "📜 歷史戰報紀錄", promptName: "請輸入勇者姓名：", promptError: "順序不對，再試一次！",
+            cooldown: "切換太快囉，請稍等！", reportUser: "勇者", reportMode: "挑戰模式", reportTotal: "總用時", 
+            reportSlow: "🚩 重點複習題：", verText: "教材版本", errorText: "錯誤次數"
+        },
+        en: {
+            mainTitle: "🚀 Sentence Scramble", modeMulti: "🌌 Interstellar Mission", modeMultiDesc: "Official Teacher Library",
+            modeSingle: "🛡️ Private Training", modeSingleDesc: "Upload Excel/CSV", btnHistory: "📜 Training Logs",
+            btnBack: "Back", btnSubmit: "Submit Answer", uploadTitle: "📂 Upload Question Library", optPractice: "📖 Full Practice",
+            optDelta: "🎲 Delta's Challenge (Random 10)", reportTitle: "🏆 Mission Accomplished!", btnHome: "Home Screen",
+            historyTitle: "📜 Mission Logs", promptName: "Enter Hero's Name:", promptError: "Not quite, try again!",
+            cooldown: "Cooling down...", reportUser: "Hero", reportMode: "Mode", reportTotal: "Total Time", 
+            reportSlow: "🚩 Review Questions:", verText: "Version", errorText: "Errors"
+        }
+    };
+
+    let lang = 'zh';
+    function setLanguage(l) { lang = l; document.getElementById('lang-screen').classList.add('hidden'); document.getElementById('start-screen').classList.remove('hidden'); updateUI(); }
+    function updateUI() {
+        const t = i18n[lang];
+        document.getElementById('ui-main-title').textContent = t.mainTitle;
+        document.getElementById('ui-mode-multi-title').textContent = t.modeMulti;
+        document.getElementById('ui-mode-multi-desc').textContent = t.modeMultiDesc;
+        document.getElementById('ui-mode-single-title').textContent = t.modeSingle;
+        document.getElementById('ui-mode-single-desc').textContent = t.modeSingleDesc;
+        document.getElementById('ui-btn-history').textContent = t.btnHistory;
+        document.getElementById('ui-upload-title').textContent = t.uploadTitle;
+        document.getElementById('ui-btn-back').textContent = t.btnBack;
+        document.getElementById('ui-btn-back2').textContent = t.btnBack;
+        document.getElementById('ui-opt-practice').textContent = t.optPractice;
+        document.getElementById('ui-opt-delta').textContent = t.optDelta;
+        document.getElementById('ui-btn-submit').textContent = t.btnSubmit;
+        document.getElementById('ui-report-title').textContent = t.reportTitle;
+        document.getElementById('ui-btn-home').textContent = t.btnHome;
+        document.getElementById('ui-history-title').textContent = t.historyTitle;
+    }
+
+    let groups = { easy: [], mid: [], hard: [] }, currentList = [], quizLogs = [], currentIndex = 0, correctWords = [], qStartTime, globalStartTime, timerInterval, currentVersion = "v1", excelName = "data.xlsx", playerName = "", selectedGameMode = "", lastThemeChange = 0;
+    let currentErrors = 0; // 新增：單題錯誤記錄
+
+    function toggleTheme() { if (Date.now() - lastThemeChange < 30000) return alert(i18n[lang].cooldown); document.body.classList.toggle('dark-mode'); lastThemeChange = Date.now(); }
+
+    async function detectVersion() { try { const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/`); const files = await res.json(); const excels = files.filter(f => f.name.startsWith('data') && f.name.endsWith('.xlsx')); if(excels.length > 0) { excels.sort((a,b) => b.name.localeCompare(a.name, undefined, {numeric:true})); excelName = excels[0].name; currentVersion = excelName.match(/_v(\d+)/) ? `v${excelName.match(/_v(\d+)/)[1]}` : "v1"; } } catch(e) {} document.getElementById('ver-display').textContent = `${i18n[lang].verText}: ${currentVersion}`; }
+
+    window.selectSystemMode = async (m) => { playerName = prompt(i18n[lang].promptName) || (lang==='en'?"Hero":"勇者"); document.getElementById('start-screen').classList.add('hidden'); if(m === 'multi') { await detectVersion(); const r = await fetch(excelName); processExcel(await r.arrayBuffer()); document.getElementById('mode-screen').classList.remove('hidden'); } else { document.getElementById('upload-screen').classList.remove('hidden'); } };
+
+    function processExcel(buffer) { const wb = XLSX.read(buffer); const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:"A"}); groups = { easy:[], mid:[], hard:[] }; data.forEach(r => { if(r.B && r.C) { const len = r.B.trim().split(/\s+/).length; if(len < 4) groups.easy.push(r); else if(len <= 6) groups.mid.push(r); else groups.hard.push(r); } }); if(document.getElementById('upload-screen').offsetParent !== null) document.getElementById('mode-screen').classList.remove('hidden'); }
+    document.getElementById('excel-file').addEventListener('change', async(e) => processExcel(await e.target.files[0].arrayBuffer()));
+
+    window.initGame = (m) => {
+        selectedGameMode = m; const getRand = (arr, n) => [...arr].sort(() => 0.5 - Math.random()).slice(0, n);
+        if(m.includes('Practice')) { currentList = [...groups.easy, ...groups.mid, ...groups.hard]; } 
+        else { // Delta Challenge: 10題 (1易, 3中, 6難)
+            currentList = [...getRand(groups.easy, 1), ...getRand(groups.mid, 3), ...getRand(groups.hard, 6)].sort(() => 0.5 - Math.random());
+        }
+        if(currentList.length === 0) return alert("題庫內容不足！");
+        currentIndex = 0; quizLogs = []; document.getElementById('mode-screen').classList.add('hidden'); document.getElementById('game-screen').classList.remove('hidden'); globalStartTime = Date.now(); timerInterval = setInterval(() => { document.getElementById('timer').textContent = ((Date.now()-globalStartTime)/1000).toFixed(1); }, 100); loadQ();
+    };
+
+    function loadQ() {
+        const d = currentList[currentIndex]; 
+        document.getElementById('q-info').textContent = `${currentIndex+1} / ${currentList.length}`; 
+        document.getElementById('hint-text').textContent = d.C; 
+        correctWords = d.B.trim().split(/\s+/); 
+        currentErrors = 0; // 重置單題錯誤
+        
+        let shuf = [...correctWords].sort(()=>Math.random()-0.5); 
+        const p = document.getElementById('word-pool'); p.innerHTML = ''; 
+        
+        shuf.forEach(w => { 
+            const c = document.createElement('div'); 
+            c.className='word-card'; 
+            c.draggable=true; 
+            c.textContent=w; 
+            
+            // SEN 教學支援：自動標記首字與尾字
+            if(w[0] === w[0].toUpperCase() && w[0].match(/[A-Z]/)) c.classList.add('is-start');
+            if(w.match(/[.?!,]$/)) c.classList.add('is-end');
+
+            c.addEventListener('dragstart', handleDragStart);
+            c.addEventListener('dragend', handleDragEnd);
+            p.appendChild(c); 
+        }); 
+        qStartTime = Date.now(); 
+    }
+
+    let placeholder = document.createElement('div');
+    placeholder.className = 'drag-placeholder';
+
+    function handleDragStart(e) { this.classList.add('dragging'); placeholder.style.width = this.offsetWidth + 'px'; placeholder.style.height = this.offsetHeight + 'px'; }
+    function handleDragEnd(e) { this.classList.remove('dragging'); if (placeholder.parentNode) placeholder.parentNode.removeChild(placeholder); }
+    document.getElementById('word-pool').addEventListener('dragover', (e) => { e.preventDefault(); const p = document.getElementById('word-pool'); const draggingItem = document.querySelector('.dragging'); const afterElement = getDragAfterElement(p, e.clientX); if (afterElement == null) { p.appendChild(placeholder); p.appendChild(draggingItem); } else { p.insertBefore(placeholder, afterElement); p.insertBefore(draggingItem, placeholder); } });
+    function getDragAfterElement(container, x) { const draggableElements = [...container.querySelectorAll('.word-card:not(.dragging)')]; return draggableElements.reduce((closest, child) => { const box = child.getBoundingClientRect(); const offset = x - box.left - box.width / 2; if (offset < 0 && offset > closest.offset) return { offset: offset, element: child }; else return closest; }, { offset: Number.NEGATIVE_INFINITY }).element; }
+
+    window.checkAnswer = () => {
+        const userWords = [...document.querySelectorAll('.word-card')].map(el=>el.textContent);
+        if(userWords.join(' ') === correctWords.join(' ')) {
+            // 答對回饋：綠色閃爍
+            document.getElementById('main-dialogue').classList.add('flash-success');
+            setTimeout(() => document.getElementById('main-dialogue').classList.remove('flash-success'), 500);
+
+            quizLogs.push({ 
+                q: correctWords.join(' '), 
+                a: document.getElementById('hint-text').textContent, 
+                time: (Date.now()-qStartTime)/1000,
+                errors: currentErrors // 記錄錯誤次數
+            });
+            currentIndex++;
+            if(currentIndex < currentList.length) setTimeout(loadQ, 600);
+            else generateReport();
+        } else {
+            currentErrors++; // 錯誤次數加 1
+            alert(i18n[lang].promptError);
+        }
+    };
+
+    function generateReport() { 
+        clearInterval(timerInterval); 
+        const total = (Date.now() - globalStartTime) / 1000; 
+        const report = { playerName, mode: selectedGameMode, version: currentVersion, total, date: new Date().toLocaleString(), logs: quizLogs }; 
+        saveToLocal(report); 
+        displayReportUI(report); 
+    }
+
+    function saveToLocal(d) { let h = JSON.parse(localStorage.getItem('quiz_history') || '[]'); h.unshift(d); if(h.length > 10) h = h.slice(0,10); localStorage.setItem('quiz_history', JSON.stringify(h)); }
+
+    function displayReportUI(d) { 
+        const t = i18n[lang]; 
+        document.getElementById('game-screen').classList.add('hidden'); 
+        document.getElementById('report-screen').classList.remove('hidden'); 
+        
+        // 分析重點複習題 (錯誤最多或耗時最久)
+        const reviewItems = [...d.logs].sort((a,b) => (b.errors * 10 + b.time) - (a.errors * 10 + a.time)).slice(0,3);
+
+        let html = `<p>👤 ${t.reportUser}: ${d.playerName}</p><p>🧭 ${t.reportMode}: ${d.mode}</p><p>⏱️ ${t.reportTotal}: ${d.total.toFixed(1)}s</p><h3>${t.reportSlow}</h3>`;
+        reviewItems.forEach(s => {
+            html += `<div style="font-size:0.9rem; margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.05); border-radius:8px;">
+                        <b>${s.q}</b><br>
+                        <small>${s.a}</small><br>
+                        <span class="error-tag">${t.errorText}: ${s.errors}</span> | <span>${s.time.toFixed(1)}s</span>
+                     </div>`;
+        });
+        document.getElementById('report-content').innerHTML = html; 
+    }
+
+    window.showHistoryList = () => {
+        document.getElementById('start-screen').classList.add('hidden'); 
+        document.getElementById('history-screen').classList.remove('hidden'); 
+        const h = JSON.parse(localStorage.getItem('quiz_history') || '[]'); 
+        const l = document.getElementById('history-list'); 
+        l.innerHTML = h.length ? "" : (lang==='zh'?"尚無紀錄":"No records."); 
+        h.forEach(item => { 
+            const div = document.createElement('div'); 
+            div.className = 'history-list-item'; 
+            div.innerHTML = `<span>${item.date}</span> <b>${item.total.toFixed(1)}s</b>`; 
+            l.appendChild(div); 
+        }); 
+    };
+</script>
+</body>
+</html>
